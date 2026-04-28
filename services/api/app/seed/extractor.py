@@ -60,9 +60,17 @@ Excerpt:
 JSON only:"""
 
 
-def llm_extract(text: str, model: str = "qwen2.5:7b") -> dict:
-    """Call local Ollama for extraction. Returns {} on failure (caller falls back)."""
+def llm_extract(text: str, model: str | None = None) -> dict:
+    """Call local Ollama for extraction. Returns {} on failure (caller falls back).
+
+    Handles both standard and 'thinking' models — the thinking model
+    families (qwen3, deepseek-r1, etc.) put output in `thinking` and
+    leave `response` empty when format=json is set."""
+    import os
+    import re
     import httpx
+    if model is None:
+        model = os.environ.get("NEUROFORGE_EXTRACT_MODEL", "llama3.2:latest")
     try:
         r = httpx.post(
             "http://localhost:11434/api/generate",
@@ -70,20 +78,73 @@ def llm_extract(text: str, model: str = "qwen2.5:7b") -> dict:
                   "prompt": EXTRACTION_PROMPT.format(text=text[:8000]),
                   "stream": False, "format": "json",
                   "options": {"temperature": 0.0}},
-            timeout=120.0,
+            timeout=180.0,
         )
         r.raise_for_status()
-        body = r.json().get("response", "")
+        data = r.json()
+        body = data.get("response", "") or data.get("thinking", "") or ""
         if not body:
             return {}
-        return json.loads(body)
+        try:
+            return json.loads(body)
+        except json.JSONDecodeError:
+            # Some thinking models embed JSON inside chain-of-thought text.
+            m = re.search(r"\{.*\}", body, re.DOTALL)
+            if m:
+                try:
+                    return json.loads(m.group(0))
+                except json.JSONDecodeError:
+                    pass
+            print(f"[extractor] could not parse LLM JSON ({model}); skipping chunk")
+            return {}
     except Exception as e:
         print(f"[extractor] LLM extraction skipped: {e}")
         return {}
 
 
+def _coerce_str(v) -> str:
+    """LLMs occasionally return objects where strings are expected. Flatten."""
+    if v is None:
+        return ""
+    if isinstance(v, str):
+        return v.strip()
+    if isinstance(v, dict):
+        # Prefer common label fields, then dump the whole dict as readable text
+        for k in ("label", "name", "value", "text"):
+            if k in v and isinstance(v[k], str):
+                return v[k].strip()
+        kvs = [f"{k}: {_coerce_str(val)}" for k, val in v.items()
+               if val and not isinstance(val, (dict, list))]
+        return "; ".join(kvs)
+    if isinstance(v, list):
+        return ", ".join(_coerce_str(x) for x in v if x)
+    return str(v).strip()
+
+
+def _coerce_str_list(v) -> list[str]:
+    """Normalize a list field to a clean list[str], deduped, no empties."""
+    if v is None:
+        return []
+    if not isinstance(v, list):
+        v = [v]
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in v:
+        s = _coerce_str(item)
+        if not s or s.lower() in {"none", "n/a", "no", "unknown"}:
+            continue
+        if s in seen:
+            continue
+        seen.add(s)
+        out.append(s)
+    return out
+
+
 def merge(profiles: list[dict]) -> dict:
-    """Union-merge LLM extractions across multiple documents."""
+    """Union-merge LLM extractions across multiple documents.
+
+    All scalars are coerced to clean strings; lists are deduped and
+    empty/null-equivalent entries dropped."""
     out: dict = {
         "patient_ref": "ingested-patient",
         "age": 0,
@@ -92,27 +153,62 @@ def merge(profiles: list[dict]) -> dict:
         "diagnoses_open": [], "diagnoses_ruled_out": [], "risk_factors": [],
     }
     seen_finding_keys: set[tuple[str, str]] = set()
+    seen_symptom_labels: set[str] = set()
+    list_buckets: dict[str, list[str]] = {
+        "medications": [], "diagnoses_open": [],
+        "diagnoses_ruled_out": [], "risk_factors": [],
+    }
+    list_seen: dict[str, set[str]] = {k: set() for k in list_buckets}
+
     for p in profiles:
         for f in p.get("findings", []) or []:
-            f.setdefault("source_doc", "")
-            f.setdefault("differential", [])
-            for k in ("label", "location", "chronicity", "radiology_favored"):
-                f.setdefault(k, "")
-            key = (f["label"], f["location"])
+            if not isinstance(f, dict):
+                f = {"label": _coerce_str(f)}
+            label = _coerce_str(f.get("label"))
+            location = _coerce_str(f.get("location"))
+            if not label and not location:
+                continue
+            key = (label, location)
             if key in seen_finding_keys:
                 continue
             seen_finding_keys.add(key)
-            out["findings"].append(f)
+            out["findings"].append({
+                "label": label, "location": location,
+                "chronicity": _coerce_str(f.get("chronicity")),
+                "radiology_favored": _coerce_str(f.get("radiology_favored")),
+                "differential": _coerce_str_list(f.get("differential")),
+                "source_doc": _coerce_str(f.get("source_doc")),
+            })
+
         for s in p.get("symptoms", []) or []:
-            for k in ("label", "laterality", "onset", "duration", "frequency"):
-                s.setdefault(k, "")
-            s.setdefault("triggers", [])
-            if s["label"] and s["label"] not in {x["label"] for x in out["symptoms"]}:
-                out["symptoms"].append(s)
-        for k in ("medications", "diagnoses_open", "diagnoses_ruled_out", "risk_factors"):
+            if not isinstance(s, dict):
+                s = {"label": _coerce_str(s)}
+            label = _coerce_str(s.get("label"))
+            if not label or label in seen_symptom_labels:
+                continue
+            seen_symptom_labels.add(label)
+            out["symptoms"].append({
+                "label": label,
+                "laterality": _coerce_str(s.get("laterality")),
+                "onset": _coerce_str(s.get("onset")),
+                "duration": _coerce_str(s.get("duration")),
+                "frequency": _coerce_str(s.get("frequency")),
+                "triggers": _coerce_str_list(s.get("triggers")),
+            })
+
+        for k in list_buckets:
             for v in p.get(k, []) or []:
-                if v and v not in out[k]:
-                    out[k].append(v)
+                s = _coerce_str(v)
+                if not s or s.lower() in {"none", "n/a"}:
+                    continue
+                low = s.lower()
+                if low in list_seen[k]:
+                    continue
+                list_seen[k].add(low)
+                list_buckets[k].append(s)
+
+    for k, vals in list_buckets.items():
+        out[k] = vals
     return out
 
 

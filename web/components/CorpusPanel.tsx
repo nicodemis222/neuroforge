@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { color, space, radius } from "../styles/tokens";
+import { PanelHeader } from "./PanelHeader";
 import { api, type CorpusListing } from "../lib/api";
 
 const formatBytes = (n: number): string => {
@@ -58,17 +59,20 @@ export const CorpusPanel: React.FC = () => {
   };
 
   return (
-    <div style={{ padding: space.xl, overflow: "auto", height: "100%" }}>
+    <div style={{ display: "grid", gridTemplateRows: "auto 1fr", height: "100%", overflow: "hidden" }}>
+      <PanelHeader
+        title="Document corpus"
+        subtitle="ingest clinical reports — everything stays local · 16 file formats supported"
+      />
+      <div style={{ padding: space.xl, overflow: "auto" }}>
       <div style={{ maxWidth: 880, margin: "0 auto" }}>
-        <h1 style={{ color: color.accent, fontSize: 18, margin: 0, fontWeight: 600 }}>
-          Document corpus
-        </h1>
-        <p style={{ color: color.textDim, fontSize: 12, marginTop: space.xs, marginBottom: space.lg }}>
-          Drop clinical documents here. Everything stays local — files live under
+        <p style={{ color: color.textDim, fontSize: 12, marginTop: 0, marginBottom: space.lg }}>
+          Drop clinical documents into the zone below. Files live under
           <code style={{ background: color.bg2, padding: "1px 5px", borderRadius: 3, margin: "0 4px" }}>data/patient_corpus/</code>
           and are gitignored. Extraction populates
           <code style={{ background: color.bg2, padding: "1px 5px", borderRadius: 3, margin: "0 4px" }}>profile.json</code>
-          which the platform loads instead of the synthetic default.
+          which drives the hypothesis, safety screen, and briefing anchors —
+          replacing the synthetic example.
         </p>
 
         <div
@@ -179,6 +183,7 @@ export const CorpusPanel: React.FC = () => {
           <a href="https://ollama.com">ollama.com</a> and run{" "}
           <code>ollama pull qwen2.5:7b</code>.
         </div>
+      </div>
       </div>
     </div>
   );

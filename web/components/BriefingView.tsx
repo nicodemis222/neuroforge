@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { color, space, radius, SEVERITY_COLOR } from "../styles/tokens";
+import { PanelHeader } from "./PanelHeader";
 import { api, type Intervention } from "../lib/api";
 import { Markdown } from "../lib/markdown";
 
@@ -40,8 +41,12 @@ export const BriefingView: React.FC<{
     <div style={{
       background: color.bg1, border: `1px solid ${color.border}`,
       borderRadius: radius.md, height: "100%",
-      display: "grid", gridTemplateRows: "auto auto 1fr", overflow: "hidden",
+      display: "grid", gridTemplateRows: "auto auto auto 1fr", overflow: "hidden",
     }}>
+      <PanelHeader
+        title="Intervention briefing"
+        subtitle="verdict · top evidence · counter-evidence · open questions"
+      />
       <div style={{
         padding: space.md, borderBottom: `1px solid ${color.border}`,
         display: "flex", alignItems: "center", gap: space.md, flexWrap: "wrap",

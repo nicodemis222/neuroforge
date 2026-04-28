@@ -242,19 +242,39 @@ The header itself shows live system state:
 ### Dashboard tab
 
 ```
-┌─────────── Sidebar ──────────┬─────────── Main ──────────────────┐
-│ [search box]                  │  ┌─────────────┬───────────────┐  │
-│ category · tier · safety chips│  │             │               │  │
-│ filters                       │  │  Scatter    │   Briefing    │  │
-│ [hide n=0]                    │  │  (map)      │   (when item  │  │
-│ ─────────────────             │  │             │    selected)  │  │
-│ ● Clemastine fumarate         │  │             │               │  │
-│ ● High-intensity training     │  │             │               │  │
-│ ● Lion's Mane                 │  │             │               │  │
-│ ● Ketogenic diet              │  └─────────────┴───────────────┘  │
-│ … (filtered list)             │                                    │
-└───────────────────────────────┴────────────────────────────────────┘
+┌── Hypothesis bar — active investigation ────────────────────────────┐
+│  "Among ~42 candidates, which best promote <targets>, safety-cleared │
+│   for this profile, ranked by quality × plausibility?"               │
+│   chips: 42 candidates · ◎ targets · ⚠ active safety screens         │
+├── Sidebar ─────────┬── Evidence map ────┬── Investigation cockpit ──┤
+│ [search]           │                    │  Synopsis · Loops · Activity│
+│ category chips     │   scatter          │  • top of stack            │
+│ tier chips         │   (filter-aware,   │  • target clusters         │
+│ safety chips       │   shape=category,  │  • latest evidence         │
+│ [hide n=0]         │   color=safety)    │  • live loop status        │
+│ ─────────          ├── Briefing ────────┤  • activity stream         │
+│ ● item ⓘ           │   (when selected)  │                            │
+│ ● item ⓘ           │   markdown +       │                            │
+│ … filtered list    │   safety band      │                            │
+└────────────────────┴────────────────────┴────────────────────────────┘
 ```
+
+The hypothesis bar derives the research question from the loaded profile +
+ontology. Click `+ falsifiers · anchors` to expand it: you see the actual
+keywords used in retrieval queries, plus the kinds of evidence that would
+knock a candidate off the list. If the loaded profile is the synthetic
+example, the bar says so and points to the Corpus tab.
+
+The investigation cockpit on the right has three tabs:
+
+- **Synopsis** — coverage stats, top of stack by `quality × plausibility`,
+  *target clusters* (multiple candidates engaging the same mechanism), and
+  the latest evidence retrieved in the last 24h
+- **Loops** — live scheduler state per loop (intervention / safety / rollup):
+  status (idle/running/sleeping/error), last tick, next tick, last connector
+  used, last result count, total ticks
+- **Activity** — rolling stream of every scheduler event (tick start/end,
+  per-connector queries, errors), color-coded by kind
 
 #### The sidebar
 

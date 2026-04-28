@@ -78,27 +78,65 @@ def _quality(evidence: Evidence) -> float:
 
 def _plausibility(evidence: Evidence, profile: PatientProfile) -> float:
     """Mechanistic plausibility = how close the targeted mechanism is to the
-    patient's lesion + symptom profile."""
-    score = 0.0
+    patient's lesion + symptom profile.
+
+    Designed to *spread* — anatomy-keyword hits are required for top scores,
+    so an evidence row with target match but no anatomy mention sits in the
+    mid-range, not pinned to 1.0.
+    """
+    # Base from target relevance, but discounted so target alone caps at ~0.55.
+    base = 0.0
     for tk in evidence.target_keys:
         t = TARGETS_BY_KEY.get(tk)
         if t:
-            score = max(score, t.patient_relevance)
-    # Bonus if title/abstract mentions patient-anatomy keywords.
+            base = max(base, t.patient_relevance * 0.55)
+
     text = f"{evidence.title} {evidence.abstract}".lower()
-    anatomy_hits = sum(1 for kw in (
+    profile_anchors = []
+    for f in profile.findings:
+        for s in (f.label, f.location, f.radiology_favored):
+            if s and not s.startswith("(example)"):
+                profile_anchors.append(s.lower())
+    for sym in profile.symptoms:
+        if sym.label and not sym.label.startswith("(example)"):
+            profile_anchors.append(sym.label.lower())
+
+    # Generic neuro-recovery vocabulary (always counted).
+    generic_kw = (
         "corticospinal", "internal capsule", "cerebral peduncle",
         "crossed cerebellar", "diaschisis", "periventricular",
-        "remyelination", "axonal sprouting", "oligodendrocyte progenitor",
-        "focal aware seizure",
-    ) if kw in text)
-    score = min(1.0, score + 0.05 * anatomy_hits)
-    # Intervention-side bonus if the paper actually studies an intervention
-    # we track.
+        "remyelination", "axonal sprouting", "axon regeneration",
+        "oligodendrocyte progenitor", "focal aware seizure",
+        "white matter", "demyelination", "ischemic", "stroke recovery",
+        "neuroplasticity", "neurogenesis",
+    )
+    generic_hits = sum(1 for kw in generic_kw if kw in text)
+
+    # Profile-specific phrase hits (each 4-char-or-longer word).
+    specific_hits = 0
+    for anchor in profile_anchors:
+        for word in anchor.split():
+            if len(word) >= 5 and word in text:
+                specific_hits += 1
+                break
+
+    # Intervention category match — a known intervention term in the abstract
+    # gives a small confidence bump.
+    iv_hits = 0
     for ik in evidence.intervention_keys:
         iv = INTERVENTIONS_BY_KEY.get(ik)
-        if iv and iv.targets:
-            score += 0.05
+        if iv and iv.name.lower() in text:
+            iv_hits += 1
+
+    score = base + 0.07 * generic_hits + 0.05 * specific_hits + 0.04 * iv_hits
+    # Slight randomization-resistant differentiator: study type modifier
+    # nudges plausibility apart so RCTs don't sit on top of preclinicals.
+    if evidence.study_type == "rct":
+        score += 0.02
+    elif evidence.study_type == "preclinical":
+        score -= 0.03
+    elif evidence.study_type == "community":
+        score -= 0.05
     return max(0.0, min(1.0, score))
 
 

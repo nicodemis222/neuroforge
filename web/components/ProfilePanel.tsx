@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { color, space, radius } from "../styles/tokens";
+import { PanelHeader } from "./PanelHeader";
 import { api, type PatientProfile } from "../lib/api";
 
 const Section: React.FC<{ title: string; count?: number; children: React.ReactNode }> = ({ title, count, children }) => (
@@ -35,15 +36,18 @@ export const ProfilePanel: React.FC = () => {
   const isExample = profile.findings.every(f => f.label.startsWith("(example)"));
 
   return (
-    <div style={{ padding: space.xl, overflow: "auto", height: "100%" }}>
+    <div style={{ display: "grid", gridTemplateRows: "auto 1fr", height: "100%", overflow: "hidden" }}>
+      <PanelHeader
+        title="Patient profile"
+        subtitle="the lens through which retrieval is filtered, scored, and safety-screened"
+      />
+      <div style={{ padding: space.xl, overflow: "auto" }}>
       <div style={{ maxWidth: 880, margin: "0 auto" }}>
-        <h1 style={{ color: color.accent, fontSize: 18, margin: 0, fontWeight: 600 }}>
-          Patient profile
-        </h1>
-        <p style={{ color: color.textDim, fontSize: 12, marginTop: space.xs, marginBottom: space.lg }}>
-          The lens through which retrieval is filtered and scored.
+        <p style={{ color: color.textDim, fontSize: 12, marginTop: 0, marginBottom: space.lg }}>
           Loaded from <code>data/patient_corpus/profile.json</code> if present,
-          otherwise the synthetic example.
+          otherwise the synthetic example. This is the data that drives the
+          hypothesis statement, the safety screen axes, and the mechanistic
+          plausibility scoring.
         </p>
 
         {isExample && (
@@ -150,6 +154,7 @@ export const ProfilePanel: React.FC = () => {
               {profile.risk_factors.map((d, i) => <li key={i} style={{ marginBottom: 4 }}>{d}</li>)}
             </ul>}
         </Section>
+      </div>
       </div>
     </div>
   );

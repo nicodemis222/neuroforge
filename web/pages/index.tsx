@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { Header } from "../components/Header";
+import { HypothesisBar } from "../components/HypothesisBar";
 import { Sidebar } from "../components/Sidebar";
 import { Scatter } from "../components/Scatter";
 import { BriefingView } from "../components/BriefingView";
 import { CorpusPanel } from "../components/CorpusPanel";
 import { ProfilePanel } from "../components/ProfilePanel";
+import { TelemetryPanel } from "../components/TelemetryPanel";
 import { color, space } from "../styles/tokens";
+import { useFilters } from "../lib/filters";
 import { api, type Intervention, type PatientProfile } from "../lib/api";
 
 type Tab = "dashboard" | "corpus" | "profile";
@@ -17,10 +20,10 @@ export default function Home() {
   const [selected, setSelected] = useState<string | null>(null);
   const [schedulerOn, setSchedulerOn] = useState(false);
 
-  const refreshItems = useCallback(() =>
-    api.interventions().then(setItems), []);
-  const refreshProfile = useCallback(() =>
-    api.profile().then(setProfile), []);
+  const { filters, filtered, toggle, reset, setQ, setHideEmpty, isActive } = useFilters(items);
+
+  const refreshItems = useCallback(() => api.interventions().then(setItems), []);
+  const refreshProfile = useCallback(() => api.profile().then(setProfile), []);
 
   useEffect(() => {
     refreshItems();
@@ -39,7 +42,7 @@ export default function Home() {
   return (
     <div style={{
       height: "100vh", display: "grid",
-      gridTemplateRows: "auto 1fr", background: color.bg0,
+      gridTemplateRows: "auto auto 1fr", background: color.bg0,
     }}>
       <Header
         tab={tab} setTab={setTab}
@@ -48,16 +51,25 @@ export default function Home() {
         schedulerOn={schedulerOn}
       />
 
+      {tab === "dashboard" && <HypothesisBar />}
+
       {tab === "dashboard" && (
-        <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", overflow: "hidden" }}>
-          <Sidebar items={items} selected={selected} onSelect={setSelected} />
+        <div style={{
+          display: "grid", gridTemplateColumns: "auto 1fr auto",
+          overflow: "hidden",
+        }}>
+          <Sidebar items={items} filtered={filtered} filters={filters}
+                   toggleFilter={toggle} setQ={setQ} setHideEmpty={setHideEmpty}
+                   resetFilters={reset} isFilterActive={isActive}
+                   selected={selected} onSelect={setSelected} />
           <main style={{
             padding: space.md, display: "grid",
-            gridTemplateColumns: selectedItem ? "1fr 1fr" : "1fr",
+            gridTemplateRows: selectedItem ? "1fr 1fr" : "1fr",
             gap: space.md, overflow: "hidden",
           }}>
             <div style={{ minHeight: 0 }}>
-              <Scatter items={items} selected={selected} onSelect={setSelected} />
+              <Scatter items={filtered} totalItems={items.length}
+                       selected={selected} onSelect={setSelected} />
             </div>
             {selectedItem && (
               <div style={{ minHeight: 0, overflow: "hidden" }}>
@@ -65,6 +77,7 @@ export default function Home() {
               </div>
             )}
           </main>
+          <TelemetryPanel onSelectIntervention={setSelected} />
         </div>
       )}
 

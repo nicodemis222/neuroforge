@@ -15,13 +15,14 @@ from app.ontology import INTERVENTIONS, INTERVENTIONS_BY_KEY, TARGETS
 from app.safety import screen, screen_all
 from app.scheduler import run_one_intervention, run_scheduler
 from app.seed import load as load_profile
-from app.routers import init_status, corpus
+from app.routers import init_status, corpus, research
 
 app = FastAPI(title="NEUROFORGE", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
 app.include_router(init_status.router)
 app.include_router(corpus.router)
+app.include_router(research.router)
 
 
 @app.on_event("startup")
@@ -58,15 +59,17 @@ def list_targets() -> list[dict]:
 
 @app.get("/api/ontology/interventions")
 def list_interventions() -> list[dict]:
+    """List interventions with live safety screen derived from the loaded
+    profile. Safety is computed fresh per call so changes to the patient
+    profile (via document ingest) reflect immediately."""
+    verdicts = screen_all()
     out = []
     conn = connect()
     for iv in INTERVENTIONS:
         score = conn.execute(
             "SELECT * FROM intervention_score WHERE intervention_key = ?",
             (iv.key,)).fetchone()
-        sv = conn.execute(
-            "SELECT * FROM safety_verdict WHERE intervention_key = ?",
-            (iv.key,)).fetchone()
+        v = verdicts.get(iv.key)
         out.append({
             "key": iv.key, "name": iv.name, "category": iv.category,
             "targets": list(iv.targets), "expected_tier": iv.expected_tier,
@@ -76,8 +79,11 @@ def list_interventions() -> list[dict]:
             "n_evidence": score["n_evidence"] if score else 0,
             "mean_quality": score["mean_quality"] if score else None,
             "mean_plausibility": score["mean_plausibility"] if score else None,
-            "safety_overall": sv["overall"] if sv else "ok",
-            "safety_flags": json.loads(sv["flags_json"]) if sv else [],
+            "safety_overall": v.overall.value if v else "ok",
+            "safety_flags": [
+                {"severity": f.severity.value, "axis": f.axis,
+                 "rationale": f.rationale} for f in (v.flags if v else [])
+            ],
         })
     conn.close()
     return out

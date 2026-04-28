@@ -162,6 +162,39 @@ fields.
   serotonin-syndrome co-administrations are `HARD_BLOCK`, and the
   briefing surfaces these in section 1 before any evidence summary.
 
+## Architecture honesty (v3)
+
+Despite the "agent / cockpit" framing, **v3 is a deterministic pipeline**
+with one LLM call (document extraction). What's actually doing what:
+
+| Layer | Implementation | Uses LLM? |
+|---|---|---|
+| Document → profile extraction | `app/seed/extractor.py` calls Ollama | yes (default `llama3.2:latest`) |
+| 13 source connectors | templated HTTP clients | no |
+| Scheduler (3 loops) | asyncio + per-loop locks + jitter | no |
+| Evidence grading | rule-based formula (tier × study_type × source × recency × anatomy hits) | no |
+| Safety screen | drug-class taxonomies + per-intervention metadata | no |
+| Briefing generator | f-string template over DB queries | no |
+| Synopsis | SQL aggregation | no |
+
+This works because the ontology + safety rules + grading formula encode
+enough domain knowledge to produce useful output deterministically. It's
+also fast, predictable, and cheap to run.
+
+**Where actual agents would help (see [docs/V4_AGENTS_AND_RAG.md](docs/V4_AGENTS_AND_RAG.md)):**
+
+1. **Synthesis agent** — RAG over retrieved abstracts → grounded prose
+   in the briefing's "what the literature actually says" section
+2. **Critic agent** — adversarial pass for disconfirming evidence and
+   patient-mismatch flags
+3. **Coverage agent** — picks next-best-query based on ontology gaps
+   instead of round-robin
+4. **Triage agent** — synchronous top-up when an opened briefing has
+   thin evidence
+
+These are designed but not built. v4 trigger: when the templated briefing
+becomes the bottleneck.
+
 ## What this is NOT
 
 This is a research-platform output. Nothing here is a recommendation,

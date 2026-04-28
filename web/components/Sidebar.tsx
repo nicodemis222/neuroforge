@@ -1,22 +1,12 @@
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { color, space, radius, SEVERITY_COLOR, TIER_COLOR } from "../styles/tokens";
-import type { Intervention } from "../lib/api";
+import { PanelHeader } from "./PanelHeader";
+import { api, type Intervention, type Rationale } from "../lib/api";
+import type { Filters } from "../lib/filters";
 
 const CATEGORIES = ["drug", "biologic", "supplement", "behavioral", "device", "holistic"];
 const TIERS = ["T1", "T2", "T3", "T4", "T5"];
 const SAFETY = ["ok", "caution", "warn", "hard_block"];
-
-type Filters = {
-  q: string;
-  category: Set<string>;
-  tier: Set<string>;
-  safety: Set<string>;
-  hideEmpty: boolean;
-};
-
-const defaultFilters = (): Filters => ({
-  q: "", category: new Set(), tier: new Set(), safety: new Set(), hideEmpty: false,
-});
 
 const ChipToggle: React.FC<{
   active: boolean; onClick: () => void; tone?: string; children: React.ReactNode;
@@ -31,42 +21,31 @@ const ChipToggle: React.FC<{
 );
 
 export const Sidebar: React.FC<{
-  items: Intervention[];
+  items: Intervention[];                // total catalog
+  filtered: Intervention[];             // post-filter list
+  filters: Filters;
+  toggleFilter: (k: keyof Filters, v: string) => void;
+  setQ: (q: string) => void;
+  setHideEmpty: (b: boolean) => void;
+  resetFilters: () => void;
+  isFilterActive: boolean;
   selected: string | null;
   onSelect: (key: string) => void;
-}> = ({ items, selected, onSelect }) => {
-  const [f, setF] = useState<Filters>(defaultFilters());
-
-  const filtered = useMemo(() => {
-    const q = f.q.trim().toLowerCase();
-    return items.filter(it => {
-      if (q && !it.name.toLowerCase().includes(q) && !it.targets.join(" ").toLowerCase().includes(q)) return false;
-      if (f.category.size && !f.category.has(it.category)) return false;
-      if (f.tier.size && !f.tier.has(it.expected_tier)) return false;
-      if (f.safety.size && !f.safety.has(it.safety_overall)) return false;
-      if (f.hideEmpty && it.n_evidence === 0) return false;
-      return true;
-    });
-  }, [items, f]);
-
-  const toggle = (key: keyof Filters, val: string) => setF(prev => {
-    const next = new Set(prev[key] as Set<string>);
-    next.has(val) ? next.delete(val) : next.add(val);
-    return { ...prev, [key]: next };
-  });
-
-  const reset = () => setF(defaultFilters());
-  const filterActive = f.q || f.category.size || f.tier.size || f.safety.size || f.hideEmpty;
-
+}> = ({ items, filtered, filters: f, toggleFilter, setQ, setHideEmpty,
+        resetFilters, isFilterActive, selected, onSelect }) => {
   return (
     <aside style={{
       width: 360, background: color.bg1, borderRight: `1px solid ${color.border}`,
-      display: "grid", gridTemplateRows: "auto auto 1fr", overflow: "hidden",
+      display: "grid", gridTemplateRows: "auto auto auto 1fr", overflow: "hidden",
     }}>
+      <PanelHeader
+        title="Catalog of candidate interventions"
+        subtitle="click any row for the briefing · ⓘ for the rationale"
+      />
       <div style={{ padding: space.md, borderBottom: `1px solid ${color.border}` }}>
         <input
           value={f.q}
-          onChange={e => setF(p => ({ ...p, q: e.target.value }))}
+          onChange={e => setQ(e.target.value)}
           placeholder="search interventions or targets…"
           style={{
             width: "100%", padding: `${space.sm}px ${space.md}px`,
@@ -80,34 +59,34 @@ export const Sidebar: React.FC<{
       <div style={{ padding: space.md, borderBottom: `1px solid ${color.border}`, display: "grid", gap: space.sm }}>
         <FilterRow label="category">
           {CATEGORIES.map(c => (
-            <ChipToggle key={c} active={f.category.has(c)} onClick={() => toggle("category", c)}>
+            <ChipToggle key={c} active={f.category.has(c)} onClick={() => toggleFilter("category", c)}>
               {c}
             </ChipToggle>
           ))}
         </FilterRow>
         <FilterRow label="tier">
           {TIERS.map(t => (
-            <ChipToggle key={t} active={f.tier.has(t)} onClick={() => toggle("tier", t)} tone={TIER_COLOR[t]}>
+            <ChipToggle key={t} active={f.tier.has(t)} onClick={() => toggleFilter("tier", t)} tone={TIER_COLOR[t]}>
               {t}
             </ChipToggle>
           ))}
         </FilterRow>
         <FilterRow label="safety">
           {SAFETY.map(s => (
-            <ChipToggle key={s} active={f.safety.has(s)} onClick={() => toggle("safety", s)} tone={SEVERITY_COLOR[s]}>
+            <ChipToggle key={s} active={f.safety.has(s)} onClick={() => toggleFilter("safety", s)} tone={SEVERITY_COLOR[s]}>
               {s.replace("_", " ")}
             </ChipToggle>
           ))}
         </FilterRow>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
-          <ChipToggle active={f.hideEmpty} onClick={() => setF(p => ({ ...p, hideEmpty: !p.hideEmpty }))}>
+          <ChipToggle active={f.hideEmpty} onClick={() => setHideEmpty(!f.hideEmpty)}>
             hide n=0
           </ChipToggle>
           <span style={{ color: color.textFaint, fontSize: 10 }}>
-            {filtered.length} of {items.length}
-            {filterActive && <button onClick={reset} style={{
+            {filtered.length} of {items.length} · also applied to evidence map
+            {isFilterActive && <button onClick={resetFilters} style={{
               background: "transparent", border: "none", color: color.accent,
-              cursor: "pointer", marginLeft: space.sm, fontSize: 10,
+              cursor: "pointer", marginLeft: space.sm, fontSize: 10, fontFamily: "inherit",
             }}>reset</button>}
           </span>
         </div>
@@ -135,39 +114,71 @@ const FilterRow: React.FC<{ label: string; children: React.ReactNode }> = ({ lab
 const InterventionCard: React.FC<{
   it: Intervention; selected: boolean; onSelect: (k: string) => void;
 }> = ({ it, selected, onSelect }) => {
+  const [showRationale, setShowRationale] = useState(false);
+  const [rationale, setRationale] = useState<Rationale | null>(null);
   const sevColor = SEVERITY_COLOR[it.safety_overall] || color.textDim;
   const tierColor = TIER_COLOR[it.expected_tier] || color.textDim;
   const q = it.mean_quality, p = it.mean_plausibility;
 
+  const openRationale = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowRationale(s => !s);
+    if (!rationale) api.rationale(it.key).then(setRationale).catch(() => {});
+  };
+
   return (
-    <button onClick={() => onSelect(it.key)} style={{
-      width: "100%", textAlign: "left",
-      background: selected ? color.bg3 : color.bg1,
-      border: `1px solid ${selected ? color.accent : color.border}`,
-      borderRadius: radius.sm, padding: space.sm, marginBottom: space.xs,
-      cursor: "pointer", display: "grid",
-      gridTemplateColumns: "10px 1fr auto", gap: space.sm, alignItems: "center",
-    }}>
-      <span style={{
-        width: 8, height: 8, background: sevColor, borderRadius: "50%",
-        boxShadow: `0 0 0 2px ${color.bg1}`, marginTop: 4, alignSelf: "start",
-      }} />
-      <div style={{ minWidth: 0 }}>
-        <div style={{
-          color: selected ? color.accent : color.text, fontSize: 12, fontWeight: 500,
-          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-        }}>{it.name}</div>
-        <div style={{ color: color.textFaint, fontSize: 10, marginTop: 2 }}>
-          {it.category} · <span style={{ color: tierColor }}>{it.expected_tier}</span> · {it.seizure_risk}
-        </div>
-      </div>
-      <div style={{
-        textAlign: "right", fontSize: 10, color: color.textDim, lineHeight: 1.3,
+    <div>
+      <button onClick={() => onSelect(it.key)} style={{
+        width: "100%", textAlign: "left",
+        background: selected ? color.bg3 : color.bg1,
+        border: `1px solid ${selected ? color.accent : color.border}`,
+        borderRadius: radius.sm, padding: space.sm, marginBottom: showRationale ? 0 : space.xs,
+        borderBottomLeftRadius: showRationale ? 0 : radius.sm,
+        borderBottomRightRadius: showRationale ? 0 : radius.sm,
+        cursor: "pointer", display: "grid",
+        gridTemplateColumns: "10px 1fr auto auto", gap: space.sm, alignItems: "center",
+        fontFamily: "inherit",
       }}>
-        <div>n={it.n_evidence}</div>
-        <div>{q != null ? `q=${q.toFixed(2)}` : "—"}</div>
-        <div>{p != null ? `p=${p.toFixed(2)}` : "—"}</div>
-      </div>
-    </button>
+        <span style={{
+          width: 8, height: 8, background: sevColor, borderRadius: "50%",
+          boxShadow: `0 0 0 2px ${color.bg1}`, marginTop: 4, alignSelf: "start",
+        }} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{
+            color: selected ? color.accent : color.text, fontSize: 12, fontWeight: 500,
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          }}>{it.name}</div>
+          <div style={{ color: color.textFaint, fontSize: 10, marginTop: 2 }}>
+            {it.category} · <span style={{ color: tierColor }}>{it.expected_tier}</span> · {it.seizure_risk}
+          </div>
+        </div>
+        <div style={{
+          textAlign: "right", fontSize: 10, color: color.textDim, lineHeight: 1.3,
+        }}>
+          <div>n={it.n_evidence}</div>
+          <div>{q != null ? `q=${q.toFixed(2)}` : "—"}</div>
+          <div>{p != null ? `p=${p.toFixed(2)}` : "—"}</div>
+        </div>
+        <span
+          onClick={openRationale}
+          title="why is this intervention a candidate?"
+          style={{
+            color: showRationale ? color.accent : color.textFaint,
+            fontSize: 14, lineHeight: 1, cursor: "pointer",
+            padding: "0 4px",
+          }}>ⓘ</span>
+      </button>
+      {showRationale && (
+        <div style={{
+          background: color.bg2, border: `1px solid ${color.accent}`,
+          borderTop: "none",
+          borderBottomLeftRadius: radius.sm, borderBottomRightRadius: radius.sm,
+          padding: space.sm, marginBottom: space.xs,
+          fontSize: 11, color: color.textDim, lineHeight: 1.5,
+        }}>
+          {rationale ? rationale.rationale : "loading rationale…"}
+        </div>
+      )}
+    </div>
   );
 };
