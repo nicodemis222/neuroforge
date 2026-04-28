@@ -1,0 +1,50 @@
+# Patient data — never commit
+data/patient_corpus/*
+!data/patient_corpus/README.md
+!data/patient_corpus/.gitkeep
+data/raw/
+data/tmp/
+data/neuroforge.db
+data/*.db
+data/*.sqlite
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+*.so
+
+# Virtualenvs
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+CREDENTIALS.md
+secrets/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# Logs
+*.log
+logs/
