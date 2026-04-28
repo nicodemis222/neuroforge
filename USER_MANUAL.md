@@ -162,9 +162,10 @@ scripts\seed.bat                  :: Windows
 
 ### 4b. Upload through the UI
 
-The dashboard (when fully built out) exposes an upload panel that posts
-to `/api/corpus/upload`. The endpoint enforces the supported-extension
-allowlist server-side and rejects anything else with a clear error.
+Click the **Corpus** tab. Drag files into the drop zone (or click "choose
+files"). Click **▶ extract → profile** to run the ingest pipeline. The
+allowlist is enforced server-side; rejected files appear in a red banner
+with the reason.
 
 ### 4c. Upload via API
 
@@ -223,62 +224,125 @@ The next ingest will re-extract from scratch.
 
 ## 5. Reading the dashboard
 
-The dashboard at <http://localhost:3210> has three regions:
+The UI at <http://localhost:3210> has three top-level tabs in the header:
+
+| Tab | What's there |
+|---|---|
+| **Dashboard** | Sidebar (search/filters/intervention list) + scatter map + briefing pane |
+| **Corpus** | Drag-drop document ingest, file list, extract action |
+| **Profile** | The currently-loaded patient profile (findings, symptoms, meds, diagnoses) |
+
+The header itself shows live system state:
+
+- **Profile chip** — `N findings · M meds` if a real profile is loaded;
+  `example profile · drop docs to anchor` if you're still on the synthetic default.
+- **Evidence count** — total rows in the database across all interventions.
+- **Scheduler pill** — `on` or `off` based on the `NEUROFORGE_SCHEDULER` env var.
+
+### Dashboard tab
 
 ```
-┌──────────────────────┬──────────────────────────────────────────┐
-│  Sidebar             │  Main panel                              │
-│  (intervention list) │                                          │
-│                      │   [evidence × plausibility scatter]      │
-│   ● clemastine       │                                          │
-│   ● lions_mane       │   ─────────────────                      │
-│   ● 7,8-DHF          │                                          │
-│   ●… (~42 total)     │   [refresh] [briefing markdown]          │
-└──────────────────────┴──────────────────────────────────────────┘
+┌─────────── Sidebar ──────────┬─────────── Main ──────────────────┐
+│ [search box]                  │  ┌─────────────┬───────────────┐  │
+│ category · tier · safety chips│  │             │               │  │
+│ filters                       │  │  Scatter    │   Briefing    │  │
+│ [hide n=0]                    │  │  (map)      │   (when item  │  │
+│ ─────────────────             │  │             │    selected)  │  │
+│ ● Clemastine fumarate         │  │             │               │  │
+│ ● High-intensity training     │  │             │               │  │
+│ ● Lion's Mane                 │  │             │               │  │
+│ ● Ketogenic diet              │  └─────────────┴───────────────┘  │
+│ … (filtered list)             │                                    │
+└───────────────────────────────┴────────────────────────────────────┘
 ```
 
-### The sidebar
+#### The sidebar
 
-Every intervention in the ontology, listed with:
+A live-filtered list of every intervention in the ontology. The header
+of each card has:
 
 - **Coloured dot** — current safety verdict (see §7).
-  - 🟢 ok — no flags
-  - 🟡 caution — review the rationale
-  - 🟠 warn — discuss with clinician before considering
-  - 🔴 hard_block — do not proceed without prerequisites met
-- **Name** + category (drug / supplement / device / behavioral / holistic / biologic)
-- **Tier** — where evidence is *expected* to live (T1 = peer-reviewed,
-  T5 = holistic / fringe). The grading layer makes the final call from
-  retrieved evidence.
-- **n** — how many evidence rows have been retrieved for this intervention.
-- **q** — mean evidence quality (0–1, GRADE-inspired).
-- **p** — mean mechanistic plausibility against the loaded profile.
+  - 🟢 **ok** — no flags
+  - 🟡 **caution** — review the rationale
+  - 🟠 **warn** — discuss with clinician before considering
+  - 🔴 **hard_block** — do not proceed without prerequisites met
+- **Name** + meta line (`category · tier · seizure_risk`)
+- **Score column** (right): `n` (evidence count), `q` (mean quality), `p` (mean plausibility)
 
-Click any row to drill into the briefing.
+Above the list:
 
-### The scatter plot
+- **Search box** — matches against intervention names and target keys
+  (e.g. typing `bdnf` shows everything that engages BDNF).
+- **Category / tier / safety chips** — toggle to narrow the list. Active
+  chips are color-coded by tier (T1 teal → T5 amber) or by severity.
+- **Hide n=0** — collapses interventions that haven't been searched yet.
 
-X-axis = evidence quality. Y-axis = mechanistic plausibility. Both 0–1.
+The counter at the bottom (`X of Y`) shows how aggressively your filters
+are narrowing the list. **Reset** clears all filters.
 
-- **Top-right quadrant** = high-quality literature that's directly relevant
-  to your profile. **This is where to spend your reading time.**
-- **Top-left** = relevant in mechanism but weak evidence. Watch list — keep
-  an eye on whether stronger evidence appears.
-- **Bottom-right** = high-quality but not directly relevant to your specific
-  findings. Useful background.
+#### The scatter (evidence map)
+
+X-axis = evidence quality (0–1). Y-axis = mechanistic plausibility (0–1).
+Quadrant labels appear at the top corners:
+
+- **Top-right (HIGH Q + HIGH P)** = high-quality literature that's directly
+  relevant to your profile. **This is where to spend your reading time.**
+- **Top-left (LOW Q + HIGH P)** = relevant in mechanism but weak evidence.
+  Watch list — keep an eye on whether stronger evidence appears.
+- **Bottom-right** = high-quality but not directly relevant to your
+  specific findings. Useful background.
 - **Bottom-left** = noise.
 
-Dot color = safety verdict. A high-quality, high-plausibility intervention
-with a red dot is a candidate for *future* discussion with your clinician
-once safety prerequisites are met (e.g. EEG capture, ASM coverage, washout
-of an interacting medication).
+Labels use force-spread placement so they don't overlap when dots stack.
+Hover any dot to highlight its label and draw a leader line. Dot color =
+safety verdict.
 
-### Refresh
+#### Briefing pane
 
-The **↻ refresh evidence** button on a selected intervention queues a
-synchronous run of the scheduler for just that intervention — useful when
-you've just changed the ontology or want fresh hits without waiting for
-the 6-hour cycle.
+Appears beside the scatter when you click an intervention. The header
+shows the intervention name, meta line, and a **↻ refresh evidence** button
+that triggers a fresh search for that one intervention (synchronous —
+results land in 30–90s).
+
+If the intervention has any safety flags, they appear in a tinted band
+right under the header **before** the briefing body. This forces you to
+see the flag before reading any rec.
+
+The briefing body is rendered markdown — headings, lists, links, code,
+bold/italic.
+
+### Corpus tab
+
+A full-width panel for managing your documents:
+
+- **Drop zone** — drag files in or click "choose files". Background tints
+  while dragging.
+- **Supported formats** — listed below the drop zone. Anything else gets
+  rejected with a clear reason.
+- **File list** — name, ext, size, delete button per file. Delete prompts
+  for confirmation (it removes the file from disk).
+- **Extract → profile button** — runs the ingest pipeline against every
+  file in the corpus. Background task; you'll see an "extraction queued"
+  banner.
+
+### Profile tab
+
+A read-only view of the currently-loaded `PatientProfile`. If you're on
+the synthetic example, a yellow notice tells you to drop documents in
+the Corpus tab.
+
+Sections:
+
+- **Stats**: patient_ref, age, sex
+- **Findings** — each card shows label, location, chronicity,
+  radiology-favored interpretation, differential, source document
+- **Symptoms** — laterality, onset, duration, frequency, triggers
+- **Medications** — chip list (these drive the safety screen)
+- **Diagnoses (open / ruled out)** — bullet lists
+- **Risk factors**
+
+This is your sanity check that the extractor pulled the right things out
+of your documents.
 
 ---
 
@@ -671,8 +735,8 @@ from the profile. If a medication isn't being detected as serotonergic or
 catecholaminergic, the medication name in your profile may not match the
 substring lists in `app/safety/screen.py`. Either:
 
-- Use the canonical generic name in your document (e.g. "vortioxetine"
-  not just "Trintellix"), or
+- Use the canonical generic name in your document (e.g. "fluoxetine"
+  not just the brand name), or
 - Add the brand name to `SEROTONERGIC_RX` / `CATECHOLAMINERGIC_RX` /
   `ANTISEIZURE_RX` in `screen.py`.
 

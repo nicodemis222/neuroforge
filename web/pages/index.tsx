@@ -1,122 +1,75 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { Header } from "../components/Header";
+import { Sidebar } from "../components/Sidebar";
+import { Scatter } from "../components/Scatter";
+import { BriefingView } from "../components/BriefingView";
+import { CorpusPanel } from "../components/CorpusPanel";
+import { ProfilePanel } from "../components/ProfilePanel";
+import { color, space } from "../styles/tokens";
+import { api, type Intervention, type PatientProfile } from "../lib/api";
 
-type Intervention = {
-  key: string; name: string; category: string;
-  expected_tier: string; seizure_risk: string;
-  n_evidence: number; mean_quality: number | null;
-  mean_plausibility: number | null;
-  safety_overall: string;
-  safety_flags: { severity: string; axis: string; rationale: string }[];
-};
-
-const SEV_COLOR: Record<string, string> = {
-  ok: "#3fa", caution: "#fc6", warn: "#f73", hard_block: "#e33",
-};
+type Tab = "dashboard" | "corpus" | "profile";
 
 export default function Home() {
+  const [tab, setTab] = useState<Tab>("dashboard");
   const [items, setItems] = useState<Intervention[]>([]);
+  const [profile, setProfile] = useState<PatientProfile | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  const [briefing, setBriefing] = useState<string>("");
+  const [schedulerOn, setSchedulerOn] = useState(false);
+
+  const refreshItems = useCallback(() =>
+    api.interventions().then(setItems), []);
+  const refreshProfile = useCallback(() =>
+    api.profile().then(setProfile), []);
 
   useEffect(() => {
-    fetch("/api/ontology/interventions").then(r => r.json()).then(setItems);
-  }, []);
+    refreshItems();
+    refreshProfile();
+    api.initStatus().then(s => setSchedulerOn(!!s.scheduler_on));
+    const t = setInterval(() => {
+      refreshItems();
+      api.initStatus().then(s => setSchedulerOn(!!s.scheduler_on)).catch(() => {});
+    }, 30000);
+    return () => clearInterval(t);
+  }, [refreshItems, refreshProfile]);
 
-  useEffect(() => {
-    if (!selected) return;
-    fetch(`/api/intervention/${selected}/briefing`)
-      .then(r => r.json())
-      .then(d => setBriefing(d.markdown));
-  }, [selected]);
-
-  const refresh = (k: string) =>
-    fetch(`/api/intervention/${k}/refresh`, { method: "POST" });
+  const totalEvidence = items.reduce((s, i) => s + i.n_evidence, 0);
+  const selectedItem = items.find(i => i.key === selected) || null;
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "440px 1fr",
-                  height: "100vh", fontFamily: "ui-monospace,Menlo,monospace",
-                  background: "#0a0e14", color: "#cfe" }}>
-      <aside style={{ borderRight: "1px solid #1a2330", overflow: "auto", padding: 14 }}>
-        <h1 style={{ margin: 0, fontSize: 18, color: "#7fe" }}>NEUROFORGE</h1>
-        <p style={{ fontSize: 11, color: "#7a8" }}>
-          patient-anchored neuronal-regrowth research<br/>
-          chronic L-CST · cross-cerebellar diaschisis · ?focal aware seizures
-        </p>
-        <div style={{ display: "grid", gap: 6, marginTop: 12 }}>
-          {items.map(it => (
-            <button key={it.key} onClick={() => setSelected(it.key)}
-              style={{
-                background: selected === it.key ? "#142030" : "#0d1420",
-                border: "1px solid #1a2330", color: "#cfe", textAlign: "left",
-                padding: 8, cursor: "pointer", display: "grid",
-                gridTemplateColumns: "1fr auto", gap: 6,
-              }}>
-              <span>
-                <span style={{ display: "inline-block", width: 8, height: 8,
-                                background: SEV_COLOR[it.safety_overall] || "#888",
-                                marginRight: 6 }}/>
-                <strong>{it.name}</strong>
-                <br/>
-                <span style={{ fontSize: 10, color: "#7a8" }}>
-                  {it.category} · {it.expected_tier} · seizure: {it.seizure_risk}
-                  {" · "}n={it.n_evidence}
-                </span>
-              </span>
-              <span style={{ fontSize: 10, color: "#7a8" }}>
-                q={it.mean_quality?.toFixed(2) ?? "—"}<br/>
-                p={it.mean_plausibility?.toFixed(2) ?? "—"}
-              </span>
-            </button>
-          ))}
+    <div style={{
+      height: "100vh", display: "grid",
+      gridTemplateRows: "auto 1fr", background: color.bg0,
+    }}>
+      <Header
+        tab={tab} setTab={setTab}
+        profile={profile}
+        totalEvidence={totalEvidence}
+        schedulerOn={schedulerOn}
+      />
+
+      {tab === "dashboard" && (
+        <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", overflow: "hidden" }}>
+          <Sidebar items={items} selected={selected} onSelect={setSelected} />
+          <main style={{
+            padding: space.md, display: "grid",
+            gridTemplateColumns: selectedItem ? "1fr 1fr" : "1fr",
+            gap: space.md, overflow: "hidden",
+          }}>
+            <div style={{ minHeight: 0 }}>
+              <Scatter items={items} selected={selected} onSelect={setSelected} />
+            </div>
+            {selectedItem && (
+              <div style={{ minHeight: 0, overflow: "hidden" }}>
+                <BriefingView intervention={selectedItem} onRefresh={refreshItems} />
+              </div>
+            )}
+          </main>
         </div>
-      </aside>
-      <main style={{ overflow: "auto", padding: 18 }}>
-        <Scatter items={items} onSelect={setSelected} selected={selected}/>
-        {selected && (
-          <div style={{ marginTop: 18 }}>
-            <button onClick={() => refresh(selected)}
-              style={{ background: "#142030", color: "#7fe",
-                       border: "1px solid #1a2330", padding: "6px 10px",
-                       cursor: "pointer", marginBottom: 10 }}>
-              ↻ refresh evidence for {selected}
-            </button>
-            <pre style={{ whiteSpace: "pre-wrap", background: "#0d1420",
-                          padding: 14, border: "1px solid #1a2330",
-                          fontSize: 12, lineHeight: 1.5 }}>
-              {briefing}
-            </pre>
-          </div>
-        )}
-      </main>
-    </div>
-  );
-}
+      )}
 
-function Scatter({ items, onSelect, selected }: {
-  items: Intervention[]; onSelect: (k: string) => void; selected: string | null;
-}) {
-  const W = 760, H = 480, P = 40;
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", maxWidth: W,
-                                              border: "1px solid #1a2330",
-                                              background: "#0d1420" }}>
-      <text x={W / 2} y={20} fill="#7fe" textAnchor="middle" fontSize={12}>
-        evidence quality (x) × mechanistic plausibility (y)
-      </text>
-      <line x1={P} y1={H - P} x2={W - P} y2={H - P} stroke="#1a2330"/>
-      <line x1={P} y1={P} x2={P} y2={H - P} stroke="#1a2330"/>
-      {items.filter(i => i.mean_quality != null).map(i => {
-        const x = P + (i.mean_quality ?? 0) * (W - 2 * P);
-        const y = (H - P) - (i.mean_plausibility ?? 0) * (H - 2 * P);
-        const c = SEV_COLOR[i.safety_overall] || "#888";
-        return (
-          <g key={i.key} onClick={() => onSelect(i.key)} style={{ cursor: "pointer" }}>
-            <circle cx={x} cy={y} r={selected === i.key ? 9 : 5}
-                    fill={c} stroke={selected === i.key ? "#fff" : "none"}/>
-            <text x={x + 8} y={y + 3} fontSize={9} fill="#cfe">{i.name}</text>
-          </g>
-        );
-      })}
-    </svg>
+      {tab === "corpus" && <CorpusPanel />}
+      {tab === "profile" && <ProfilePanel />}
+    </div>
   );
 }

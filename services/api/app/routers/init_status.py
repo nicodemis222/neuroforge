@@ -32,8 +32,10 @@ WEB_NM = ROOT / "web" / "node_modules"
 @router.get("/status")
 def status() -> dict:
     """Snapshot of readiness — fast, no installs, no network."""
+    import os
     py_v = sys.version_info
     py_ok = (py_v.major, py_v.minor) >= (3, 11)
+    scheduler_on = os.environ.get("NEUROFORGE_SCHEDULER", "") == "1"
     py_deps_ok = True
     for mod in ("fastapi", "uvicorn", "httpx", "pypdf", "feedparser"):
         try:
@@ -59,6 +61,7 @@ def status() -> dict:
     return {
         "ready": ready,
         "platform": sys.platform,
+        "scheduler_on": scheduler_on,
         "python": {"version": f"{py_v.major}.{py_v.minor}.{py_v.micro}",
                    "ok": py_ok},
         "py_deps_ok": py_deps_ok,

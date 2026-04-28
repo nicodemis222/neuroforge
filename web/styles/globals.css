@@ -1,0 +1,48 @@
+/* Reset + base styles. Fonts/colors live in tokens.ts so React inline styles can reference them. */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #__next {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #070b11;
+  color: #cfe7e0;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+input, select, textarea {
+  font: inherit;
+  color: inherit;
+}
+
+a { color: #7fe5d3; }
+a:hover { color: #aef0e0; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #1a2330; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #2a3a50; }
+
+/* Markdown rendered output */
+.md h1 { font-size: 18px; color: #7fe5d3; margin: 0 0 12px; font-weight: 600; }
+.md h2 { font-size: 14px; color: #7fe5d3; margin: 18px 0 8px; font-weight: 600; }
+.md h3 { font-size: 13px; color: #aef0e0; margin: 14px 0 6px; font-weight: 600; }
+.md p { margin: 0 0 10px; }
+.md ul { margin: 0 0 10px; padding-left: 18px; }
+.md li { margin: 2px 0; }
+.md code { background: #142030; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+.md strong { color: #aef0e0; font-weight: 600; }
+.md em { color: #7a8a92; font-style: normal; }
+.md hr { border: none; border-top: 1px solid #1a2330; margin: 18px 0; }
+.md blockquote { border-left: 2px solid #2a3a50; margin: 0 0 10px; padding: 4px 12px; color: #7a8a92; }
+.md a { text-decoration: underline; text-decoration-color: #2a3a50; }
+.md a:hover { text-decoration-color: #7fe5d3; }

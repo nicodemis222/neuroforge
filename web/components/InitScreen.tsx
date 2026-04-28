@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { color, space, radius } from "../styles/tokens";
 
 type Status = {
   ready: boolean;
@@ -17,8 +18,8 @@ type Status = {
 type Line = { step: string; status: string; message: string; ts?: number };
 
 const SEV: Record<string, string> = {
-  ok: "#3fa", warn: "#fc6", error: "#e33",
-  installing: "#7be", log: "#7a8",
+  ok: color.ok, warn: color.caution, error: color.block,
+  installing: color.t2, log: color.textDim,
 };
 
 export default function InitScreen({ onReady }: { onReady: () => void }) {
@@ -44,7 +45,6 @@ export default function InitScreen({ onReady }: { onReady: () => void }) {
           es.close();
           setRunning(false);
           refresh().then(() => {
-            // If init reported ok, allow main app in.
             if (d.status === "ok") setTimeout(onReady, 600);
           });
         }
@@ -57,99 +57,126 @@ export default function InitScreen({ onReady }: { onReady: () => void }) {
   };
 
   const Row = ({ label, ok, hint }: { label: string; ok: boolean; hint?: string }) => (
-    <div style={{ display: "grid", gridTemplateColumns: "16px 180px 1fr",
-                  gap: 10, padding: "4px 0", alignItems: "center" }}>
-      <span style={{ width: 10, height: 10, background: ok ? SEV.ok : SEV.warn,
-                     display: "inline-block", borderRadius: 2 }}/>
+    <div style={{
+      display: "grid", gridTemplateColumns: "16px 200px 1fr",
+      gap: space.md, padding: "5px 0", alignItems: "center", fontSize: 12,
+    }}>
+      <span style={{
+        width: 10, height: 10, background: ok ? SEV.ok : SEV.warn,
+        display: "inline-block", borderRadius: 2,
+      }} />
       <span>{label}</span>
-      <span style={{ color: "#7a8", fontSize: 11 }}>{hint}</span>
+      <span style={{ color: color.textFaint, fontSize: 11 }}>{hint}</span>
     </div>
   );
 
   return (
-    <div style={{ background: "#0a0e14", color: "#cfe", minHeight: "100vh",
-                  fontFamily: "ui-monospace,Menlo,monospace", padding: 28 }}>
-      <h1 style={{ color: "#7fe", margin: 0, fontSize: 22 }}>
+    <div style={{
+      background: color.bg0, color: color.text, minHeight: "100vh",
+      padding: space.xxl,
+    }}>
+      <h1 style={{ color: color.accent, margin: 0, fontSize: 22, letterSpacing: "0.05em" }}>
         NEUROFORGE — initialization
       </h1>
-      <p style={{ color: "#7a8", maxWidth: 720 }}>
-        First-run dependency check. The host platform is{" "}
-        <code style={{ color: "#7be" }}>{status?.platform || "…"}</code>.
-        Click <strong>Run init</strong> to install missing Python and Node
-        packages, bootstrap the local database, and verify connectivity.
+      <p style={{ color: color.textDim, maxWidth: 720, fontSize: 13 }}>
+        First-run dependency check. Host platform:{" "}
+        <code style={{ color: color.t2, background: color.bg2, padding: "1px 5px", borderRadius: 3 }}>
+          {status?.platform || "…"}
+        </code>.
+        Click <strong>Run init</strong> to install missing Python and Node packages,
+        bootstrap the local database, and verify connectivity.
       </p>
 
-      <section style={{ background: "#0d1420", border: "1px solid #1a2330",
-                        padding: 16, marginTop: 14, maxWidth: 720 }}>
-        <h2 style={{ color: "#7fe", fontSize: 14, marginTop: 0 }}>Current state</h2>
+      <section style={{
+        background: color.bg1, border: `1px solid ${color.border}`,
+        padding: space.lg, marginTop: space.md, maxWidth: 720,
+        borderRadius: radius.md,
+      }}>
+        <h2 style={{ color: color.accent, fontSize: 13, marginTop: 0, fontWeight: 600 }}>
+          CURRENT STATE
+        </h2>
         {status ? (
           <>
-            <Row label="Python ≥ 3.11" ok={status.python.ok}
-                 hint={status.python.version}/>
+            <Row label="Python ≥ 3.11" ok={status.python.ok} hint={status.python.version} />
             <Row label="Python deps installed" ok={status.py_deps_ok}
-                 hint="fastapi, uvicorn, httpx, pypdf, feedparser"/>
-            <Row label="SQLite database bootstrapped" ok={status.db_ok}/>
-            <Row label="Patient corpus PDFs" ok={status.corpus_pdf_count > 0}
+                 hint="fastapi, uvicorn, httpx, pypdf, feedparser" />
+            <Row label="SQLite database bootstrapped" ok={status.db_ok} />
+            <Row label="Patient corpus" ok={status.corpus_pdf_count > 0}
                  hint={status.corpus_pdf_count > 0
-                   ? `${status.corpus_pdf_count} file(s): ${status.corpus_pdfs.join(", ")}`
-                   : "Drop reports into data/patient_corpus/"}/>
+                   ? `${status.corpus_pdf_count} document(s)`
+                   : "drop documents into data/patient_corpus/ (any format)"} />
             <Row label="Node.js ≥ 18 (for UI)" ok={status.node_ok}
-                 hint={!status.node_ok ? "Install from nodejs.org" : "ok"}/>
-            <Row label="npm" ok={status.npm_ok}/>
-            <Row label="Web dependencies (node_modules)" ok={status.web_deps_ok}/>
-            <Row label="Ollama (optional, PDF extraction)" ok={status.ollama_ok}
-                 hint={!status.ollama_ok ? "Install from ollama.com — optional" : "running"}/>
+                 hint={!status.node_ok ? "install from nodejs.org" : ""} />
+            <Row label="npm" ok={status.npm_ok} />
+            <Row label="Web dependencies (node_modules)" ok={status.web_deps_ok} />
+            <Row label="Ollama (optional, document extraction)" ok={status.ollama_ok}
+                 hint={!status.ollama_ok ? "install from ollama.com — optional" : "running"} />
           </>
-        ) : <span style={{ color: "#7a8" }}>loading…</span>}
+        ) : <span style={{ color: color.textFaint }}>loading…</span>}
       </section>
 
-      <div style={{ marginTop: 16, display: "flex", gap: 10 }}>
+      <div style={{ marginTop: space.lg, display: "flex", gap: space.sm }}>
         <button onClick={start} disabled={running}
-          style={{ background: running ? "#1a2330" : "#142030",
-                   border: "1px solid #2a3a50", color: running ? "#7a8" : "#7fe",
-                   padding: "8px 18px", cursor: running ? "wait" : "pointer",
-                   fontFamily: "inherit", fontSize: 13 }}>
+          style={{
+            background: running ? color.bg2 : color.bg3,
+            border: `1px solid ${color.borderStrong}`,
+            color: running ? color.textFaint : color.accent,
+            padding: `${space.sm}px ${space.xl}px`,
+            cursor: running ? "wait" : "pointer",
+            fontFamily: "inherit", fontSize: 13,
+            borderRadius: radius.sm, fontWeight: 600,
+          }}>
           {running ? "running…" : "Run init"}
         </button>
         <button onClick={refresh}
-          style={{ background: "#0d1420", border: "1px solid #1a2330",
-                   color: "#7a8", padding: "8px 14px", cursor: "pointer",
-                   fontFamily: "inherit", fontSize: 13 }}>
+          style={{
+            background: color.bg1, border: `1px solid ${color.border}`,
+            color: color.textDim, padding: `${space.sm}px ${space.lg}px`,
+            cursor: "pointer", fontFamily: "inherit", fontSize: 13,
+            borderRadius: radius.sm,
+          }}>
           ↻ refresh status
         </button>
         {status?.ready && (
           <button onClick={onReady}
-            style={{ background: "#142030", border: "1px solid #3fa",
-                     color: "#3fa", padding: "8px 18px", cursor: "pointer",
-                     fontFamily: "inherit", fontSize: 13, marginLeft: "auto" }}>
+            style={{
+              background: color.bg3, border: `1px solid ${color.ok}`,
+              color: color.ok, padding: `${space.sm}px ${space.xl}px`,
+              cursor: "pointer", fontFamily: "inherit", fontSize: 13,
+              marginLeft: "auto", borderRadius: radius.sm, fontWeight: 600,
+            }}>
             enter dashboard →
           </button>
         )}
       </div>
 
-      <section style={{ background: "#0d1420", border: "1px solid #1a2330",
-                        marginTop: 16, padding: 14, maxWidth: 720,
-                        maxHeight: 360, overflow: "auto", fontSize: 12 }}>
-        <h2 style={{ color: "#7fe", fontSize: 14, marginTop: 0 }}>Init log</h2>
+      <section style={{
+        background: color.bg1, border: `1px solid ${color.border}`,
+        marginTop: space.lg, padding: space.md, maxWidth: 720,
+        maxHeight: 360, overflow: "auto", fontSize: 12,
+        borderRadius: radius.md,
+      }}>
+        <h2 style={{ color: color.accent, fontSize: 13, marginTop: 0, fontWeight: 600 }}>
+          INIT LOG
+        </h2>
         {lines.length === 0 && (
-          <span style={{ color: "#7a8" }}>
+          <span style={{ color: color.textFaint }}>
             no output yet — click "Run init" to begin
           </span>
         )}
         {lines.map((l, i) => (
-          <div key={i} style={{ padding: "2px 0",
-                                color: SEV[l.status] || "#cfe" }}>
-            <span style={{ color: "#7a8" }}>[{l.step}]</span>{" "}
-            <span style={{ color: SEV[l.status] || "#cfe" }}>{l.status}</span>
-            {"  "}{l.message}
+          <div key={i} style={{ padding: "2px 0" }}>
+            <span style={{ color: color.textFaint }}>[{l.step}]</span>{" "}
+            <span style={{ color: SEV[l.status] || color.text }}>{l.status}</span>
+            {"  "}<span style={{ color: color.text }}>{l.message}</span>
           </div>
         ))}
       </section>
 
-      <p style={{ color: "#5a6", fontSize: 11, marginTop: 18, maxWidth: 720 }}>
-        Windows note: if Python or Node aren't installed, the init script
-        will tell you which one is missing and where to download it.
-        After installing, return here and click "Run init" again.
+      <p style={{ color: color.textFaint, fontSize: 11, marginTop: space.lg, maxWidth: 720 }}>
+        Windows note: if Python or Node aren't installed, the init script will
+        tell you which one is missing and where to download it. After installing,
+        return here and click "Run init" again.
       </p>
     </div>
   );

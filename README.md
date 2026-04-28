@@ -51,11 +51,14 @@ backend.
 ### macOS / Linux
 
 ```bash
-git clone <repo> neuroforge && cd neuroforge
-python3 scripts/init.py        # check + install everything
-./scripts/run_api.sh           # API + scheduler on :8077
+git clone https://github.com/nicodemis222/neuroforge.git && cd neuroforge
+./scripts/run_api.sh           # API + scheduler on :8077 (auto-creates .venv)
 ./scripts/run_web.sh           # UI on :3210 (auto-runs npm install)
 ```
+
+`run_api.sh` bootstraps a venv at `.venv/` automatically — works on
+Homebrew Python (PEP 668) without needing `--break-system-packages`.
+For an explicit prerequisite check beforehand, run `python3 scripts/init.py`.
 
 ### Windows
 
